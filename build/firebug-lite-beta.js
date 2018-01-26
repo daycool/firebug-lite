@@ -111,7 +111,9 @@ this.initialize = function()
     else
     {
         FBL.NS = document.documentElement.namespaceURI;
-        FBL.Env.browser = window;
+        FBL.Env.browser = window.outputWin || window;
+        FBL.Env.outputBrowser = FBL.Env.browser;
+        FBL.Env.proxyBrowser = window.proxyWin || FBL.Env.browser;
         FBL.Env.destroy = destroyEnvironment;
 
         if (document.documentElement.getAttribute("debug") == "true")
@@ -255,7 +257,7 @@ this.Env =
         saveWindowPosition: false,
         saveCommandLineHistory: false,
         
-        startOpened: false,
+        startOpened: true,
         startInNewWindow: false,
         showIconWhenHidden: true,
         
@@ -2624,10 +2626,55 @@ this.addGlobalEvent = function(name, handler)
     }
 };
 
+this.addGlobalEventChrome = function(name, handler)
+{
+    var doc = this.Firebug.proxyBrowser.document;
+    var frames = this.Firebug.proxyBrowser.window.frames;
+    
+    this.addEvent(doc, name, handler);
+    
+    if (this.Firebug.chrome.type == "popup")
+        this.addEvent(this.Firebug.chrome.document, name, handler);
+  
+    for (var i = 0, frame; frame = frames[i]; i++)
+    {
+        try
+        {
+            this.addEvent(frame.document, name, handler);
+        }
+        catch(E)
+        {
+            // Avoid acess denied
+        }
+    }
+};
+
 this.removeGlobalEvent = function(name, handler)
 {
     var doc = this.Firebug.browser.document;
     var frames = this.Firebug.browser.window.frames;
+    
+    this.removeEvent(doc, name, handler);
+    
+    if (this.Firebug.chrome.type == "popup")
+        this.removeEvent(this.Firebug.chrome.document, name, handler);
+  
+    for (var i = 0, frame; frame = frames[i]; i++)
+    {
+        try
+        {
+            this.removeEvent(frame.document, name, handler);
+        }
+        catch(E)
+        {
+            // Avoid acess denied
+        }
+    }
+};
+this.removeGlobalEventChrome = function(name, handler)
+{
+    var doc = this.Firebug.proxyBrowser.document;
+    var frames = this.Firebug.proxyBrowser.window.frames;
     
     this.removeEvent(doc, name, handler);
     
@@ -6274,6 +6321,7 @@ FBL.Firebug =
         if (FBTrace.DBG_INITIALIZE) FBTrace.sysout("Firebug.initialize", "initializing application");
         
         Firebug.browser = new Context(Env.browser);
+        Firebug.proxyBrowser = new Context(Env.proxyBrowser);
         Firebug.context = Firebug.browser;
         
         Firebug.loadPrefs();
@@ -6294,10 +6342,10 @@ FBL.Firebug =
         
         if (Firebug.disableResourceFetching)
             Firebug.Console.logFormatted(["Some Firebug Lite features are not working because " +
-            		"resource fetching is disabled. To enabled it set the Firebug Lite option " +
-            		"\"disableResourceFetching\" to \"false\". More info at " +
-            		"http://getfirebug.com/firebuglite#Options"], 
-            		Firebug.context, "warn");
+                    "resource fetching is disabled. To enabled it set the Firebug Lite option " +
+                    "\"disableResourceFetching\" to \"false\". More info at " +
+                    "http://getfirebug.com/firebuglite#Options"], 
+                    Firebug.context, "warn");
         
         if (Env.onLoad)
         {
@@ -9356,7 +9404,7 @@ FBL.FirebugChrome =
         var chrome = Firebug.chrome = new Chrome(Env.chrome);
         FirebugChrome.chromeMap[chrome.type] = chrome;
         
-        addGlobalEvent("keydown", onGlobalKeyDown);
+        addGlobalEventChrome("keydown", onGlobalKeyDown);
         
         if (Env.Options.enablePersistent && chrome.type == "popup")
         {
@@ -9528,7 +9576,7 @@ var createChromeWindow = function(options)
             
             formatNode(node);
             
-            body.appendChild(node);
+            Env.proxyBrowser.document.body.appendChild(node);
             
             // must set the id after appending to the document, otherwise will cause an
             // strange error in IE, making the iframe load the page in which the bookmarklet
@@ -11267,6 +11315,7 @@ var ChromePopupBase = extend(ChromeBase,
                 
                         Env.browser = window.opener;
                         Firebug.browser = Firebug.context = new Context(Env.browser);
+                        Firebug.proxyBrowser = new Context(Env.proxyBrowser);
                         Firebug.loadPrefs();                        
                 
                         registerConsole();
@@ -11409,11 +11458,11 @@ var onMiniIconClick = function onMiniIconClick(event)
 
 var onHSplitterMouseDown = function onHSplitterMouseDown(event)
 {
-    addGlobalEvent("mousemove", onHSplitterMouseMove);
-    addGlobalEvent("mouseup", onHSplitterMouseUp);
+    addGlobalEventChrome("mousemove", onHSplitterMouseMove);
+    addGlobalEventChrome("mouseup", onHSplitterMouseUp);
     
     if (isIE)
-        addEvent(Firebug.browser.document.documentElement, "mouseleave", onHSplitterMouseUp);
+        addEvent(Firebug.proxyBrowser.document.documentElement, "mouseleave", onHSplitterMouseUp);
     
     fbHSplitter.className = "fbOnMovingHSplitter";
     
@@ -11434,20 +11483,21 @@ var onHSplitterMouseMove = function onHSplitterMouseMove(event)
     
     if (win != win.parent)
     {
+        console.log(33333333)
         var frameElement = win.frameElement;
         if (frameElement)
         {
-            var framePos = Firebug.browser.getElementPosition(frameElement).top;
+            var framePos = Firebug.proxyBrowser.getElementPosition(frameElement).top;
             clientY += framePos;
             
             if (frameElement.style.position != "fixed")
-                clientY -= Firebug.browser.getWindowScrollPosition().top;
+                clientY -= Firebug.proxyBrowser.getWindowScrollPosition().top;
         }
     }
     
     if (isOpera && isQuiksMode && win.frameElement.id == "FirebugUI")
     {
-        clientY = Firebug.browser.getWindowSize().height - win.frameElement.offsetHeight + clientY;
+        clientY = Firebug.proxyBrowser.getWindowSize().height - win.frameElement.offsetHeight + clientY;
     }
     
     /*
@@ -11486,8 +11536,8 @@ var handleHSplitterMouseMove = function()
     
     var clientY = onHSplitterMouseMoveBuffer;
     
-    var windowSize = Firebug.browser.getWindowSize();
-    var scrollSize = Firebug.browser.getWindowScrollSize();
+    var windowSize = Firebug.proxyBrowser.getWindowSize();
+    var scrollSize = Firebug.proxyBrowser.getWindowScrollSize();
     
     // compute chrome fixed size (top bar and command line)
     var commandLineHeight = Firebug.chrome.commandLineVisible ? fbCommandLine.offsetHeight : 0;
@@ -11514,11 +11564,11 @@ var handleHSplitterMouseMove = function()
 
 var onHSplitterMouseUp = function onHSplitterMouseUp(event)
 {
-    removeGlobalEvent("mousemove", onHSplitterMouseMove);
-    removeGlobalEvent("mouseup", onHSplitterMouseUp);
+    removeGlobalEventChrome("mousemove", onHSplitterMouseMove);
+    removeGlobalEventChrome("mouseup", onHSplitterMouseUp);
     
     if (isIE)
-        removeEvent(Firebug.browser.document.documentElement, "mouseleave", onHSplitterMouseUp);
+        removeEvent(Firebug.proxyBrowser.document.documentElement, "mouseleave", onHSplitterMouseUp);
     
     fbHSplitter.className = "";
     
@@ -11535,7 +11585,7 @@ var onHSplitterMouseUp = function onHSplitterMouseUp(event)
 
 var onVSplitterMouseDown = function onVSplitterMouseDown(event)
 {
-    addGlobalEvent("mousemove", onVSplitterMouseMove);
+    addGlobalEventChrome("mousemove", onVSplitterMouseMove);
     addGlobalEvent("mouseup", onVSplitterMouseUp);
     
     return false;
@@ -11572,8 +11622,8 @@ var onVSplitterMouseMove = function onVSplitterMouseMove(event)
 
 var onVSplitterMouseUp = function onVSplitterMouseUp(event)
 {
-    removeGlobalEvent("mousemove", onVSplitterMouseMove);
-    removeGlobalEvent("mouseup", onVSplitterMouseUp);
+    removeGlobalEventChrome("mousemove", onVSplitterMouseMove);
+    removeGlobalEventChrome("mouseup", onVSplitterMouseUp);
     
     Firebug.chrome.draw();
 };
@@ -12509,109 +12559,109 @@ FBL.JSON = JSON;
  */
 
 var store = (function(){
-	var api = {},
-		win = window,
-		doc = win.document,
-		localStorageName = 'localStorage',
-		globalStorageName = 'globalStorage',
-		namespace = '__firebug__storejs__',
-		storage
+    var api = {},
+        win = window,
+        doc = win.document,
+        localStorageName = 'localStorage',
+        globalStorageName = 'globalStorage',
+        namespace = '__firebug__storejs__',
+        storage
 
-	api.disabled = false
-	api.set = function(key, value) {}
-	api.get = function(key) {}
-	api.remove = function(key) {}
-	api.clear = function() {}
-	api.transact = function(key, transactionFn) {
-		var val = api.get(key)
-		if (typeof val == 'undefined') { val = {} }
-		transactionFn(val)
-		api.set(key, val)
-	}
+    api.disabled = false
+    api.set = function(key, value) {}
+    api.get = function(key) {}
+    api.remove = function(key) {}
+    api.clear = function() {}
+    api.transact = function(key, transactionFn) {
+        var val = api.get(key)
+        if (typeof val == 'undefined') { val = {} }
+        transactionFn(val)
+        api.set(key, val)
+    }
 
-	api.serialize = function(value) {
-		return JSON.stringify(value)
-	}
-	api.deserialize = function(value) {
-		if (typeof value != 'string') { return undefined }
-		return JSON.parse(value)
-	}
+    api.serialize = function(value) {
+        return JSON.stringify(value)
+    }
+    api.deserialize = function(value) {
+        if (typeof value != 'string') { return undefined }
+        return JSON.parse(value)
+    }
 
-	// Functions to encapsulate questionable FireFox 3.6.13 behavior 
-	// when about.config::dom.storage.enabled === false
-	// See https://github.com/marcuswestin/store.js/issues#issue/13
-	function isLocalStorageNameSupported() {
-		try { return (localStorageName in win && win[localStorageName]) }
-		catch(err) { return false }
-	}
-	
-	function isGlobalStorageNameSupported() {
-		try { return (globalStorageName in win && win[globalStorageName] && win[globalStorageName][win.location.hostname]) }
-		catch(err) { return false }
-	}	
+    // Functions to encapsulate questionable FireFox 3.6.13 behavior 
+    // when about.config::dom.storage.enabled === false
+    // See https://github.com/marcuswestin/store.js/issues#issue/13
+    function isLocalStorageNameSupported() {
+        try { return (localStorageName in win && win[localStorageName]) }
+        catch(err) { return false }
+    }
+    
+    function isGlobalStorageNameSupported() {
+        try { return (globalStorageName in win && win[globalStorageName] && win[globalStorageName][win.location.hostname]) }
+        catch(err) { return false }
+    }   
 
-	if (isLocalStorageNameSupported()) {
-		storage = win[localStorageName]
-		api.set = function(key, val) { storage.setItem(key, api.serialize(val)) }
-		api.get = function(key) { return api.deserialize(storage.getItem(key)) }
-		api.remove = function(key) { storage.removeItem(key) }
-		api.clear = function() { storage.clear() }
+    if (isLocalStorageNameSupported()) {
+        storage = win[localStorageName]
+        api.set = function(key, val) { storage.setItem(key, api.serialize(val)) }
+        api.get = function(key) { return api.deserialize(storage.getItem(key)) }
+        api.remove = function(key) { storage.removeItem(key) }
+        api.clear = function() { storage.clear() }
 
-	} else if (isGlobalStorageNameSupported()) {
-		storage = win[globalStorageName][win.location.hostname]
-		api.set = function(key, val) { storage[key] = api.serialize(val) }
-		api.get = function(key) { return api.deserialize(storage[key] && storage[key].value) }
-		api.remove = function(key) { delete storage[key] }
-		api.clear = function() { for (var key in storage ) { delete storage[key] } }
+    } else if (isGlobalStorageNameSupported()) {
+        storage = win[globalStorageName][win.location.hostname]
+        api.set = function(key, val) { storage[key] = api.serialize(val) }
+        api.get = function(key) { return api.deserialize(storage[key] && storage[key].value) }
+        api.remove = function(key) { delete storage[key] }
+        api.clear = function() { for (var key in storage ) { delete storage[key] } }
 
-	} else if (doc.documentElement.addBehavior) {
-		var storage = doc.createElement('div')
-		function withIEStorage(storeFunction) {
-			return function() {
-				var args = Array.prototype.slice.call(arguments, 0)
-				args.unshift(storage)
-				// See http://msdn.microsoft.com/en-us/library/ms531081(v=VS.85).aspx
-				// and http://msdn.microsoft.com/en-us/library/ms531424(v=VS.85).aspx
-				// TODO: xxxpedro doc.body is not always available so we must use doc.documentElement.
-				// We need to make sure this change won't affect the behavior of this library.
-				doc.documentElement.appendChild(storage)
-				storage.addBehavior('#default#userData')
-				storage.load(localStorageName)
-				var result = storeFunction.apply(api, args)
-				doc.documentElement.removeChild(storage)
-				return result
-			}
-		}
-		api.set = withIEStorage(function(storage, key, val) {
-			storage.setAttribute(key, api.serialize(val))
-			storage.save(localStorageName)
-		})
-		api.get = withIEStorage(function(storage, key) {
-			return api.deserialize(storage.getAttribute(key))
-		})
-		api.remove = withIEStorage(function(storage, key) {
-			storage.removeAttribute(key)
-			storage.save(localStorageName)
-		})
-		api.clear = withIEStorage(function(storage) {
-			var attributes = storage.XMLDocument.documentElement.attributes
-			storage.load(localStorageName)
-			for (var i=0, attr; attr = attributes[i]; i++) {
-				storage.removeAttribute(attr.name)
-			}
-			storage.save(localStorageName)
-		})
-	}
-	
-	try {
-		api.set(namespace, namespace)
-		if (api.get(namespace) != namespace) { api.disabled = true }
-		api.remove(namespace)
-	} catch(e) {
-		api.disabled = true
-	}
-	
-	return api
+    } else if (doc.documentElement.addBehavior) {
+        var storage = doc.createElement('div')
+        function withIEStorage(storeFunction) {
+            return function() {
+                var args = Array.prototype.slice.call(arguments, 0)
+                args.unshift(storage)
+                // See http://msdn.microsoft.com/en-us/library/ms531081(v=VS.85).aspx
+                // and http://msdn.microsoft.com/en-us/library/ms531424(v=VS.85).aspx
+                // TODO: xxxpedro doc.body is not always available so we must use doc.documentElement.
+                // We need to make sure this change won't affect the behavior of this library.
+                doc.documentElement.appendChild(storage)
+                storage.addBehavior('#default#userData')
+                storage.load(localStorageName)
+                var result = storeFunction.apply(api, args)
+                doc.documentElement.removeChild(storage)
+                return result
+            }
+        }
+        api.set = withIEStorage(function(storage, key, val) {
+            storage.setAttribute(key, api.serialize(val))
+            storage.save(localStorageName)
+        })
+        api.get = withIEStorage(function(storage, key) {
+            return api.deserialize(storage.getAttribute(key))
+        })
+        api.remove = withIEStorage(function(storage, key) {
+            storage.removeAttribute(key)
+            storage.save(localStorageName)
+        })
+        api.clear = withIEStorage(function(storage) {
+            var attributes = storage.XMLDocument.documentElement.attributes
+            storage.load(localStorageName)
+            for (var i=0, attr; attr = attributes[i]; i++) {
+                storage.removeAttribute(attr.name)
+            }
+            storage.save(localStorageName)
+        })
+    }
+    
+    try {
+        api.set(namespace, namespace)
+        if (api.get(namespace) != namespace) { api.disabled = true }
+        api.remove(namespace)
+    } catch(e) {
+        api.disabled = true
+    }
+    
+    return api
 })();
 
 if (typeof module != 'undefined') { module.exports = store }
