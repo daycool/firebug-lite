@@ -6,7 +6,7 @@ test iframe console
 var pwin = window;
 var proxyWin = window;
 var outputWin = document.getElementById('output').contentWindow;
-outputWin.document.write('<p style="color: red;">test</p>');
+outputWin.document.write('<p style="color: red;">test</p><script>console.log(123455)<\/script>');
 
 
 
