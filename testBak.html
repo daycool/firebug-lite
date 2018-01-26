@@ -1,0 +1,14 @@
+test iframe console
+<iframe id="output" src=""></iframe>
+
+
+<script type="text/javascript">
+var pwin = window;
+var proxyWin = window;
+var outputWin = document.getElementById('output').contentWindow;
+outputWin.document.write(3333);
+
+
+
+</script>
+<script type="text/javascript" src="build/firebug-lite-beta_bak.js"></script>
