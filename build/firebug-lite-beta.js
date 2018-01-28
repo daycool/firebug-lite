@@ -253,7 +253,7 @@ this.Env =
     // Env Options (will be transported to Firebug options)
     Options:
     {
-        saveCookies: true,
+        saveCookies: false,
 
         saveWindowPosition: false,
         saveCommandLineHistory: false,
@@ -266,8 +266,8 @@ this.Env =
         ignoreFirebugElements: true,
         disableWhenFirebugActive: true,
 
-        disableXHRListener: true,
-        disableResourceFetching: true,
+        disableXHRListener: false,
+        disableResourceFetching: false,
 
         enableTrace: false,
         enablePersistent: false
@@ -6599,6 +6599,11 @@ Firebug.restorePrefs();
 
 // xxxpedro should we remove this?
 window.Firebug = FBL.Firebug;
+window.FBL = FBL;
+window.Firebug.resetChrome = function(){
+    Firebug.chrome.destroy();
+    // FBL.FirebugChrome.create();
+};
 
 if (!Env.Options.enablePersistent ||
      Env.Options.enablePersistent && Env.isChromeContext ||
@@ -9578,7 +9583,12 @@ var createChromeWindow = function(options)
             formatNode(node);
 
             // Env.proxyBrowser.document.body.appendChild(node);
-            document.getElementById('console').appendChild(node);
+            var $FirebugUI = proxyWin.$('#FirebugUI');
+            if($FirebugUI.length){
+                node = $FirebugUI[0];
+            }else{
+                proxyWin.$('#console').append(node);
+            }
 
             // must set the id after appending to the document, otherwise will cause an
             // strange error in IE, making the iframe load the page in which the bookmarklet
@@ -10942,8 +10952,8 @@ var ChromeFrameBase = extend(ChromeBase,
             [$("fbWindow_btDeactivate"), "click", this.deactivate]
         );
 
-        if (!Env.Options.enablePersistent)
-            this.addController([Firebug.browser.window, "unload", Firebug.shutdown]);
+        // if (!Env.Options.enablePersistent)
+        //     this.addController([Firebug.browser.window, "unload", Firebug.shutdown]);
 
         if (noFixedPosition)
         {
@@ -11426,15 +11436,15 @@ var onGlobalKeyDown = function onGlobalKeyDown(event)
 
     if (keyCode == 123 /* F12 */ && (!isFirefox && !shiftKey || shiftKey && isFirefox))
     {
-        Firebug.chrome.toggle(false, ctrlKey);
-        cancelEvent(event, true);
+        // Firebug.chrome.toggle(false, ctrlKey);
+        // cancelEvent(event, true);
 
-        // TODO: xxxpedro replace with a better solution. we're doing this
-        // to allow reactivating with the F12 key after being deactivated
-        if (Env.isChromeExtension)
-        {
-            Firebug.GoogleChrome.dispatch("FB_enableIcon");
-        }
+        // // TODO: xxxpedro replace with a better solution. we're doing this
+        // // to allow reactivating with the F12 key after being deactivated
+        // if (Env.isChromeExtension)
+        // {
+        //     Firebug.GoogleChrome.dispatch("FB_enableIcon");
+        // }
     }
     else if (keyCode == 67 /* C */ && ctrlKey && shiftKey)
     {
@@ -11587,7 +11597,7 @@ var onHSplitterMouseUp = function onHSplitterMouseUp(event)
 var onVSplitterMouseDown = function onVSplitterMouseDown(event)
 {
     addGlobalEventChrome("mousemove", onVSplitterMouseMove);
-    addGlobalEvent("mouseup", onVSplitterMouseUp);
+    addGlobalEventChrome("mouseup", onVSplitterMouseUp);
 
     return false;
 };
@@ -19171,11 +19181,11 @@ var isIE6 =  /msie 6/i.test(navigator.appVersion);
 
 if (isIE6)
 {
-    _ActiveXObject = window.ActiveXObject;
+    _ActiveXObject = FBL.Env.browser.ActiveXObject;
 
     var xhrObjects = " MSXML2.XMLHTTP.5.0 MSXML2.XMLHTTP.4.0 MSXML2.XMLHTTP.3.0 MSXML2.XMLHTTP Microsoft.XMLHTTP ";
 
-    window.ActiveXObject = function(name)
+    FBL.Env.browser.ActiveXObject = function(name)
     {
         var error = null;
 
@@ -19208,7 +19218,7 @@ if (isIE6)
 if (!isIE6)
 {
     var _XMLHttpRequest = XMLHttpRequest;
-    window.XMLHttpRequest = function()
+    FBL.Env.browser.XMLHttpRequest = function()
     {
         return new XMLHttpRequestWrapper();
     };
